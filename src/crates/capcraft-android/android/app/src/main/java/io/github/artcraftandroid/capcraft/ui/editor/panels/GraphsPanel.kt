@@ -2,6 +2,7 @@ package io.github.artcraftandroid.capcraft.ui.editor.panels
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
@@ -84,9 +85,17 @@ fun GraphsPanel(vm: EditorViewModel) {
         if (batch.length() > 0) vm.edit { applyBatch(batch.toString()) }
     }
 
-    // a curve of one's own: its handles dragged on a square below the shelf
-    var custom by remember(clip.id, target) { mutableStateOf(current != null && GRAPHS.none { g -> g.points.indices.all { abs(g.points[it] - current[it]) < 0.005 } }) }
-    PanelFrame("Graphs", vm, height = if (custom) 340.dp else 230.dp) {
+    // Any preset can be opened in the editor. Linear starts with no visible handles; adding the
+    // first and second point reveals the same two cubic controls used by the native engine.
+    var custom by remember(clip.id, target) { mutableStateOf(false) }
+    var handleCount by remember(clip.id, target) { mutableStateOf(if (current != null && !current.indices.all { abs(current[it] - GRAPHS[0].points[it]) < 0.005 }) 2 else 0) }
+    val base = current ?: GRAPHS[0].points
+    fun withHandles(points: DoubleArray, count: Int): DoubleArray = when (count) {
+        0 -> GRAPHS[0].points.copyOf()
+        1 -> doubleArrayOf(if (points[0] == 0.0 && points[1] == 0.0) 0.42 else points[0], points[1], 1.0, 1.0)
+        else -> points.copyOf()
+    }
+    PanelFrame("Graphs", vm, height = if (custom) 390.dp else 230.dp) {
         if (target == null) {
             Spacer(Modifier.height(36.dp))
             Text(
@@ -98,17 +107,39 @@ fun GraphsPanel(vm: EditorViewModel) {
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 8.dp)) {
-            ChoiceTile("Custom", custom, onClick = { custom = true }, size = 56.dp) { GraphGlyph(current ?: GRAPHS[0].points) }
+            ChoiceTile("Custom", custom, onClick = {
+                custom = true
+                handleCount = if (base.indices.all { abs(base[it] - GRAPHS[0].points[it]) < 0.005 }) 0 else 2
+            }, size = 56.dp) { GraphGlyph(base) }
             GRAPHS.forEach { g ->
                 val on = !custom && current != null && g.points.indices.all { abs(g.points[it] - current[it]) < 0.005 }
                 ChoiceTile(g.name, on, onClick = {
-                    custom = false
+                    custom = true
+                    handleCount = if (g.name == "Linear") 0 else 2
                     apply(g)
                 }, size = 56.dp) { GraphGlyph(g.points) }
             }
         }
         if (custom) {
-            CurveEditor(current ?: GRAPHS[3].points) { points -> apply(Graph("Custom", points)) }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
+                Text(
+                    "Adicionar ponto",
+                    style = Type.Small,
+                    modifier = Modifier.clickable(enabled = handleCount < 2) {
+                        handleCount++
+                        apply(Graph("Custom", withHandles(base, handleCount)))
+                    }.padding(8.dp),
+                )
+                Text(
+                    "Redefinir",
+                    style = Type.Small,
+                    modifier = Modifier.clickable {
+                        handleCount = 0
+                        apply(Graph("Custom", GRAPHS[0].points))
+                    }.padding(8.dp),
+                )
+            }
+            CurveEditor(withHandles(base, handleCount), handleCount) { points -> apply(Graph("Custom", points)) }
         } else {
             Text(
                 "Shapes the stretch from the keyframe before the playhead to the one after it.",
@@ -125,7 +156,7 @@ fun GraphsPanel(vm: EditorViewModel) {
  * finger lifts.
  */
 @Composable
-private fun CurveEditor(start: DoubleArray, onSet: (DoubleArray) -> Unit) {
+private fun CurveEditor(start: DoubleArray, handleCount: Int, onSet: (DoubleArray) -> Unit) {
     var points by remember(start.toList()) { mutableStateOf(start.copyOf()) }
     val set by rememberUpdatedState(onSet)
     // progress runs from -0.6 to 1.6 up the square, so a curve may overshoot either end
@@ -137,10 +168,11 @@ private fun CurveEditor(start: DoubleArray, onSet: (DoubleArray) -> Unit) {
                 val down = awaitFirstDown()
                 val w = size.width.toFloat()
                 val h = size.height.toFloat()
-                // the handle nearer the finger
+                if (handleCount == 0) return@awaitEachGesture
+                // the handle nearer the finger; with one point only the first control is active
                 val first = Offset(points[0].toFloat() * w, y(points[1], h))
                 val second = Offset(points[2].toFloat() * w, y(points[3], h))
-                val which = if ((down.position - first).getDistance() <= (down.position - second).getDistance()) 0 else 2
+                val which = if (handleCount == 1 || (down.position - first).getDistance() <= (down.position - second).getDistance()) 0 else 2
                 while (true) {
                     val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
                     if (!change.pressed) break
@@ -160,13 +192,13 @@ private fun CurveEditor(start: DoubleArray, onSet: (DoubleArray) -> Unit) {
         drawLine(Color(0x33FFFFFF), Offset(0f, y(1.0, h)), Offset(w, y(1.0, h)), 1.dp.toPx())
         val a = Offset(0f, y(0.0, h))
         val b = Offset(w, y(1.0, h))
-        val c1 = Offset(points[0].toFloat() * w, y(points[1], h))
-        val c2 = Offset(points[2].toFloat() * w, y(points[3], h))
+        val c1 = if (handleCount >= 1) Offset(points[0].toFloat() * w, y(points[1], h)) else Offset(w / 3f, y(1.0 / 3.0, h))
+        val c2 = if (handleCount >= 2) Offset(points[2].toFloat() * w, y(points[3], h)) else Offset(w * 2f / 3f, y(2.0 / 3.0, h))
         drawLine(Color(0x88FFFFFF), a, c1, 1.dp.toPx())
         drawLine(Color(0x88FFFFFF), b, c2, 1.dp.toPx())
         drawPath(Path().apply { moveTo(a.x, a.y); cubicTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y) }, Palette.Text, style = Stroke(2.dp.toPx()))
-        drawCircle(Palette.Accent, 7.dp.toPx(), c1)
-        drawCircle(Palette.Accent, 7.dp.toPx(), c2)
+        if (handleCount >= 1) drawCircle(Palette.Accent, 7.dp.toPx(), c1)
+        if (handleCount >= 2) drawCircle(Palette.Accent, 7.dp.toPx(), c2)
     }
 }
 

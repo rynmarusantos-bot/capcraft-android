@@ -33,19 +33,23 @@ private val FROM = Color(0xFF2EC4D6)
 private val TO = Color(0xFFE5487A)
 
 /** How a transition package moves, judged from its id, for drawing its tile. */
-private enum class Motion { Fade, Flash, Wipe, Clock, Iris, Push, Slide, Zoom, Spin, Cube, Glitch }
+private enum class Motion { Fade, Flash, FlashZoom, Wipe, Clock, Iris, Heart, Doors, Push, Slide, Zoom, Spin, Cube, Glitch, Ripple }
 
 private fun motionOf(id: String): Motion = when {
     // Keep the glyph families aligned with the bundled transition IDs. The old fallback made
     // several valid transitions look like a fade, which was confusing in the selector.
+    "flash-zoom" in id -> Motion.FlashZoom
     "light-leak" in id || "film-burn" in id || "flash" in id -> Motion.Flash
     "blur-dissolve" in id || "dissolve" in id || "fade-" in id || "soft-mix" in id -> Motion.Fade
     "clock" in id -> Motion.Clock
-    "iris" in id || "shape" in id || "heart" in id || "star" in id || "diamond" in id -> Motion.Iris
+    "heart" in id -> Motion.Heart
+    "iris" in id || "shape" in id || "star" in id || "diamond" in id -> Motion.Iris
     "blinds" in id || "wipe" in id || "ripple" in id || "wave-cut" in id || "split" in id -> Motion.Wipe
-    "doors" in id || "push" in id -> Motion.Push
+    "doors" in id -> Motion.Doors
+    "push" in id -> Motion.Push
     "slide" in id || "whip" in id || "swing-cut" in id -> Motion.Slide
     "pull-in" in id || "squeeze" in id || "zoom" in id -> Motion.Zoom
+    "ripple" in id -> Motion.Ripple
     "roll" in id || "spin" in id || "swirl" in id -> Motion.Spin
     "cube" in id -> Motion.Cube
     "glitch" in id || "camera-shake" in id -> Motion.Glitch
@@ -140,6 +144,14 @@ private fun DrawScope.draw(motion: Motion, t: Float, s: Sides) {
             if (t < 0.5f) from(s) else to(s)
             drawRect(Color(0xFFFFE9B0), alpha = 1f - abs(t - 0.5f) * 2f)
         }
+        Motion.FlashZoom -> {
+            val late = t >= 0.5f
+            val z = if (late) 1f + (1f - t) * 1.2f else 1f + t * 1.2f
+            val picture = if (late) s.to else s.from
+            scale(z, pivot = Offset(w / 2f, h / 2f)) { side(picture, if (late) TO else FROM) }
+            val flash = (1f - abs(t - 0.5f) * 2f).coerceIn(0f, 1f)
+            drawRect(Color.White, alpha = flash * 0.9f)
+        }
         Motion.Wipe -> {
             from(s)
             clipRect(right = w * t) { to(s) }
@@ -156,6 +168,28 @@ private fun DrawScope.draw(motion: Motion, t: Float, s: Sides) {
         Motion.Iris -> {
             from(s)
             clipPath(Path().apply { addOval(Rect(Offset(w / 2, h / 2), w * 0.75f * t)) }) { to(s) }
+        }
+        Motion.Heart -> {
+            from(s)
+            val scale = maxOf(t * 2.4f, 0.001f)
+            val cx = w / 2f
+            val cy = h * 0.55f
+            val hw = w * 0.22f * scale
+            val hh = h * 0.24f * scale
+            val heart = Path().apply {
+                moveTo(cx, cy + hh)
+                cubicTo(cx - hw * 1.45f, cy + hh * 0.15f, cx - hw, cy - hh * 0.85f, cx - hw * 0.45f, cy - hh * 0.45f)
+                cubicTo(cx - hw * 0.1f, cy - hh * 0.9f, cx, cy - hh * 0.25f, cx, cy - hh * 0.05f)
+                cubicTo(cx, cy - hh * 0.25f, cx + hw * 0.1f, cy - hh * 0.9f, cx + hw * 0.45f, cy - hh * 0.45f)
+                cubicTo(cx + hw, cy - hh * 0.85f, cx + hw * 1.45f, cy + hh * 0.15f, cx, cy + hh)
+                close()
+            }
+            clipPath(heart) { to(s) }
+        }
+        Motion.Doors -> {
+            to(s)
+            clipRect(right = w / 2f) { from(s, x = -w * t) }
+            clipRect(left = w / 2f) { from(s, x = w * t) }
         }
         Motion.Push -> {
             from(s, x = -w * t)
@@ -198,6 +232,15 @@ private fun DrawScope.draw(motion: Motion, t: Float, s: Sides) {
                         if (early) to(s, alpha = a) else from(s, alpha = a)
                     }
                 }
+            }
+        }
+        Motion.Ripple -> {
+            from(s)
+            to(s, alpha = (t * 1.8f - 0.4f).coerceIn(0f, 1f))
+            val ring = (t * 2.5f).coerceIn(0f, 1.4f)
+            for (i in 0..2) {
+                val r = (ring - i * 0.18f).coerceAtLeast(0f) * w * 0.45f
+                if (r > 0f) drawCircle(Color.White.copy(alpha = (0.25f - i * 0.06f).coerceAtLeast(0.05f)), r, Offset(w / 2f, h / 2f), style = Stroke(1.2.dp.toPx()))
             }
         }
     }
