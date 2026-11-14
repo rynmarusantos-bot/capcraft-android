@@ -772,6 +772,10 @@ private fun onTap(vm: EditorViewModel, layout: Layout, at: Offset, playhead: Lon
         vm.editingCover = true
         return
     }
+    keyframeAt(vm, layout, at)?.let { time ->
+        vm.scrub(time)
+        return
+    }
     layout.addAudioRow?.let { r ->
         if (r.contains(at) || layout.hintTile(r).contains(at)) { vm.select(null); vm.dock = listOf(DockLevel.Root, DockLevel.Group("audio")); return }
     }
@@ -786,6 +790,20 @@ private fun onTap(vm: EditorViewModel, layout: Layout, at: Offset, playhead: Lon
     val clip = hit.second
     vm.select(if (vm.selected == clip.id) null else clip.id)
     @Suppress("UNUSED_VARIABLE") val unused = playhead
+}
+
+/** A forgiving tap target for the selected clip's visible keyframe diamonds. */
+private fun keyframeAt(vm: EditorViewModel, layout: Layout, at: Offset): Long? {
+    val selected = vm.selectedClip ?: return null
+    val row = layout.rows.indexOfFirst { it.clips.any { clip -> clip.id == selected.id } }
+    if (row < 0 || layout.folded(row)) return null
+    val rect = layout.clipRect(row, selected)
+    if (!rect.contains(at)) return null
+    val tolerance = max(12f * layout.dp, rect.height * 0.45f)
+    return selected.keysUs
+        .map { key -> selected.startUs + key }
+        .minByOrNull { time -> abs(layout.x(time) - at.x) }
+        ?.takeIf { time -> abs(layout.x(time) - at.x) <= tolerance }
 }
 
 private fun DrawScope.drawRuler(layout: Layout, measurer: androidx.compose.ui.text.TextMeasurer) {

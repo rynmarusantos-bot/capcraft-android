@@ -1089,7 +1089,9 @@ private fun TransitionPanel(vm: EditorViewModel, clipId: String) {
                         },
                         onLongClick = { vm.message = if (Favorites.toggle(context, "transition", p.id)) "Added to favorites" else "Removed from favorites" },
                     ) {
-                        TransitionGlyph(p.id, playing = true, from = from, to = to, modifier = Modifier.fillMaxSize())
+                        // Animate only while browsing. Once a transition is chosen the compact
+                        // panel stays still, avoiding a permanent animation on top of playback.
+                        TransitionGlyph(p.id, playing = browsing, from = from, to = to, modifier = Modifier.fillMaxSize())
                         if (p.id in kept) {
                             Box(Modifier.align(Alignment.TopEnd).padding(4.dp).size(18.dp).clip(CircleShape).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
                                 Glyph(LucideIcons.Bookmark, Color.White, size = 11.dp)

@@ -36,17 +36,19 @@ private val TO = Color(0xFFE5487A)
 private enum class Motion { Fade, Flash, Wipe, Clock, Iris, Push, Slide, Zoom, Spin, Cube, Glitch }
 
 private fun motionOf(id: String): Motion = when {
-    "light-leak" in id || "burn" in id -> Motion.Flash
-    "dissolve" in id -> Motion.Fade
+    // Keep the glyph families aligned with the bundled transition IDs. The old fallback made
+    // several valid transitions look like a fade, which was confusing in the selector.
+    "light-leak" in id || "film-burn" in id || "flash" in id -> Motion.Flash
+    "blur-dissolve" in id || "dissolve" in id || "fade-" in id || "soft-mix" in id -> Motion.Fade
     "clock" in id -> Motion.Clock
-    "iris" in id || "shape" in id -> Motion.Iris
-    "wipe" in id -> Motion.Wipe
-    "push" in id -> Motion.Push
-    "slide" in id || "whip" in id -> Motion.Slide
-    "zoom" in id -> Motion.Zoom
-    "spin" in id || "swirl" in id -> Motion.Spin
+    "iris" in id || "shape" in id || "heart" in id || "star" in id || "diamond" in id -> Motion.Iris
+    "blinds" in id || "wipe" in id || "ripple" in id || "wave-cut" in id || "split" in id -> Motion.Wipe
+    "doors" in id || "push" in id -> Motion.Push
+    "slide" in id || "whip" in id || "swing-cut" in id -> Motion.Slide
+    "pull-in" in id || "squeeze" in id || "zoom" in id -> Motion.Zoom
+    "roll" in id || "spin" in id || "swirl" in id -> Motion.Spin
     "cube" in id -> Motion.Cube
-    "glitch" in id -> Motion.Glitch
+    "glitch" in id || "camera-shake" in id -> Motion.Glitch
     else -> Motion.Fade
 }
 

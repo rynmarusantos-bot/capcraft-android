@@ -272,8 +272,10 @@ fun Preview(vm: EditorViewModel, modifier: Modifier) {
         val boxH = with(density) { maxHeight.toPx() }
         val aspect = t.width.toFloat() / t.height.toFloat().coerceAtLeast(1f)
         val (shownW, shownH) = if (boxW / boxH > aspect) (boxH * aspect) to boxH else boxW to (boxW / aspect)
-        // the frame the engine draws: the shown size, at most 1080 on its short side
-        val cap = min(1f, 1080f / min(shownW, shownH).coerceAtLeast(1f))
+        // While playing, 720p keeps the compositor and bitmap copies light enough to start
+        // moving sooner on phones. Paused frames return to 1080p for accurate editing.
+        val playbackCap = if (vm.playing) 720f else 1080f
+        val cap = min(1f, playbackCap / min(shownW, shownH).coerceAtLeast(1f))
         val frameW = ((shownW * cap).roundToInt() / 2 * 2).coerceAtLeast(2)
         val frameH = ((shownH * cap).roundToInt() / 2 * 2).coerceAtLeast(2)
         val image = rememberFrames(vm, frameW, frameH)
@@ -473,6 +475,12 @@ private fun PlayBar(vm: EditorViewModel) {
                         size = 24.dp,
                         description = if (onKey) "Remove keyframe" else "Add keyframe",
                     )
+                }
+                val hasCurve = sel.keysUs.distinct().size >= 2
+                if (hasCurve) {
+                    Box(Modifier.size(36.dp).clickable { vm.stop(); vm.panel = Panel.Graphs }, contentAlignment = Alignment.Center) {
+                        Glyph(LucideIcons.ChartSpline, Palette.DockText, size = 23.dp, description = "Keyframe curve")
+                    }
                 }
             }
             Box(Modifier.size(36.dp).clickable(enabled = canUndo) { vm.stop(); vm.step(back = true) }, contentAlignment = Alignment.Center) {

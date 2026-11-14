@@ -126,6 +126,8 @@ class EditorViewModel(app: Application, val path: String) : AndroidViewModel(app
     var playhead by mutableLongStateOf(0L)
     var playing by mutableStateOf(false)
         private set
+    /** Avoid invalidating the whole editor twice per video frame on high-refresh-rate phones. */
+    private var lastTickPlayheadUs = Long.MIN_VALUE
     var selected: String? by mutableStateOf(null)
     var dock: List<DockLevel> by mutableStateOf(listOf(DockLevel.Root))
     /** The second level a selected clip's tool opened in the bottom bar ("speed", "transform"), or none. */
@@ -541,10 +543,15 @@ class EditorViewModel(app: Application, val path: String) : AndroidViewModel(app
         val end = timeline?.durationUs ?: 0L
         if (end <= 0) return
         val from = if (playhead >= end - 30_000) 0L else playhead
+        lastTickPlayheadUs = from
         viewModelScope.launch {
-            withContext(Threads.commands) { runCatching { play(from) } }
-            playhead = from
-            playing = true
+            val started = withContext(Threads.commands) { runCatching { play(from) }.isSuccess }
+            if (started) {
+                playhead = from
+                playing = true
+            } else {
+                message = "Preview is still preparing; try again in a moment."
+            }
         }
     }
 
@@ -562,7 +569,13 @@ class EditorViewModel(app: Application, val path: String) : AndroidViewModel(app
             playhead = end
             stop()
         } else {
-            playhead = t
+            val fpsNum = timeline?.fpsNum?.coerceAtLeast(1L) ?: 30L
+            val fpsDen = timeline?.fpsDen?.coerceAtLeast(1L) ?: 1L
+            val frameUs = (1_000_000L * fpsDen / fpsNum).coerceAtLeast(16_667L)
+            if (t - lastTickPlayheadUs >= frameUs) {
+                playhead = t
+                lastTickPlayheadUs = t
+            }
         }
         if (!isPlaying() && playing) {
             // the player stopped by itself (end of sound, an error)
