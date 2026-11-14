@@ -995,13 +995,13 @@ private fun originalFrame(vm: EditorViewModel): Pair<Int, Int> {
 /** The tab order for the engine's transition categories; any others follow. */
 private val TRANSITION_ORDER = listOf("Basic", "Dissolve", "Slide", "Wipe", "Zoom", "Spin", "Light", "Glitch")
 
-/** A frame of a clip for a transition tile: its last when [end], else its first. */
+/** A small frame of a clip for a transition tile: its last when [end], else its first. */
 internal fun cutFrame(c: io.github.artcraftandroid.capcraft.core.ClipView, end: Boolean): android.graphics.Bitmap? = when (c.kind) {
     "video" -> {
         val at = if (end) c.sourceStartUs + (c.durationUs * c.speed).toLong() - 50_000 else c.sourceStartUs
-        Thumbs.still(c.path, at.coerceIn(c.sourceStartUs, maxOf(c.sourceStartUs, c.mediaDurationUs - 50_000)), 240)
+        Thumbs.still(c.path, at.coerceIn(c.sourceStartUs, maxOf(c.sourceStartUs, c.mediaDurationUs - 50_000)), 144)
     }
-    "image" -> Thumbs.still(c.path, 0, 240)
+    "image" -> Thumbs.still(c.path, 0, 144)
     else -> null
 }
 

@@ -1086,7 +1086,21 @@ private fun DrawScope.drawFrames(clip: ClipView, r: Rect, layout: Layout) {
     }
     val from = clip.sourceStartUs
     val to = clip.sourceStartUs + (clip.durationUs * clip.speed).toLong()
-    val strip = Thumbs.strip(clip.path, from, to, count, (tile * 0.8f).roundToInt().coerceAtLeast(16)) ?: return
+    // A full filmstrip can take noticeably longer than the first decoded frame. Draw a
+    // lightweight repeated still immediately so a newly opened timeline is not blank while
+    // the detailed strip is being prepared in the background.
+    val fallback = Thumbs.still(clip.path, clip.sourceStartUs, (tile * 1.2f).roundToInt().coerceAtLeast(16))
+    val strip = Thumbs.strip(clip.path, from, to, count, (tile * 0.8f).roundToInt().coerceAtLeast(16))
+    if (strip == null) {
+        fallback?.let { pic ->
+            var x = r.left
+            while (x < r.right) {
+                if (x + tile > 0 && x < layout.width) drawCropped(pic, Rect(x, r.top, x + tile, r.bottom))
+                x += tile
+            }
+        }
+        return
+    }
     val frameW = strip.width.toFloat() / count
     val img = strip.asImageBitmap()
     for (i in 0 until needed) {
